@@ -48,7 +48,9 @@ export async function POST(request: Request) {
           break;
         }
 
-        const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        const subscription = (await stripe.subscriptions.retrieve(
+          subscriptionId
+        )) as Stripe.Subscription;
 
         const { data: planRow, error: planError } = await supabaseAdmin
           .from("subscription_plans")
@@ -69,8 +71,12 @@ export async function POST(request: Request) {
             stripe_customer_id: customerId,
             stripe_subscription_id: subscription.id,
             status: subscription.status,
-            current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-            current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+            current_period_start: new Date(
+              subscription.current_period_start * 1000
+            ).toISOString(),
+            current_period_end: new Date(
+              subscription.current_period_end * 1000
+            ).toISOString(),
             cancel_at_period_end: subscription.cancel_at_period_end,
           });
 
@@ -90,8 +96,12 @@ export async function POST(request: Request) {
           .from("user_subscriptions")
           .update({
             status: subscription.status,
-            current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-            current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+            current_period_start: new Date(
+              subscription.current_period_start * 1000
+            ).toISOString(),
+            current_period_end: new Date(
+              subscription.current_period_end * 1000
+            ).toISOString(),
             cancel_at_period_end: subscription.cancel_at_period_end,
           })
           .eq("stripe_subscription_id", subscription.id);
