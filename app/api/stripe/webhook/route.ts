@@ -9,13 +9,32 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+function getPeriodStart(subscription: Stripe.Subscription) {
+  return (
+    (subscription as any).current_period_start ??
+    subscription.items.data[0]?.current_period_start ??
+    null
+  );
+}
+
+function getPeriodEnd(subscription: Stripe.Subscription) {
+  return (
+    (subscription as any).current_period_end ??
+    subscription.items.data[0]?.current_period_end ??
+    null
+  );
+}
+
 export async function POST(request: Request) {
   const body = await request.text();
   const headerList = await headers();
   const signature = headerList.get("stripe-signature");
 
   if (!signature) {
-    return NextResponse.json({ error: "Missing stripe signature" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing stripe signature" },
+      { status: 400 }
+    );
   }
 
   let event: Stripe.Event;
@@ -28,7 +47,10 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     console.error("Webhook signature verification failed:", error);
-    return NextResponse.json({ error: "Invalid webhook signature" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid webhook signature" },
+      { status: 400 }
+    );
   }
 
   try {
@@ -44,7 +66,9 @@ export async function POST(request: Request) {
           typeof session.subscription === "string" ? session.subscription : null;
 
         if (!userId || !plan || !subscriptionId) {
-          console.error("Missing userId, plan, or subscriptionId in session metadata");
+          console.error(
+            "Missing userId, plan, or subscriptionId in session metadata"
+          );
           break;
         }
 
@@ -63,6 +87,9 @@ export async function POST(request: Request) {
           break;
         }
 
+        const periodStart = getPeriodStart(subscription);
+        const periodEnd = getPeriodEnd(subscription);
+
         const { error: insertError } = await supabaseAdmin
           .from("user_subscriptions")
           .insert({
@@ -71,12 +98,12 @@ export async function POST(request: Request) {
             stripe_customer_id: customerId,
             stripe_subscription_id: subscription.id,
             status: subscription.status,
-            current_period_start: new Date(
-              subscription.current_period_start * 1000
-            ).toISOString(),
-            current_period_end: new Date(
-              subscription.current_period_end * 1000
-            ).toISOString(),
+            current_period_start: periodStart
+              ? new Date(periodStart * 1000).toISOString()
+              : null,
+            current_period_end: periodEnd
+              ? new Date(periodEnd * 1000).toISOString()
+              : null,
             cancel_at_period_end: subscription.cancel_at_period_end,
           });
 
@@ -92,16 +119,19 @@ export async function POST(request: Request) {
       case "customer.subscription.deleted": {
         const subscription = event.data.object as Stripe.Subscription;
 
+        const periodStart = getPeriodStart(subscription);
+        const periodEnd = getPeriodEnd(subscription);
+
         const { error: updateError } = await supabaseAdmin
           .from("user_subscriptions")
           .update({
             status: subscription.status,
-            current_period_start: new Date(
-              subscription.current_period_start * 1000
-            ).toISOString(),
-            current_period_end: new Date(
-              subscription.current_period_end * 1000
-            ).toISOString(),
+            current_period_start: periodStart
+              ? new Date(periodStart * 1000).toISOString()
+              : null,
+            current_period_end: periodEnd
+              ? new Date(periodEnd * 1000).toISOString()
+              : null,
             cancel_at_period_end: subscription.cancel_at_period_end,
           })
           .eq("stripe_subscription_id", subscription.id);
@@ -120,7 +150,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ received: true });
   } catch (error) {
     console.error("Webhook handler failed:", error);
-    return NextResponse.json({ error: "Webhook handler failed" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Webhook handler failed" },
+      { status: 500 }
+    );
   }
 }
 

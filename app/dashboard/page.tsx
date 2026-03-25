@@ -22,6 +22,15 @@ export default async function DashboardPage() {
         .maybeSingle();
 
     const subscription = await getCurrentUserSubscription(user.id);
+    const plans = subscription?.subscription_plans as
+        | { name?: string }[]
+        | { name?: string }
+        | undefined;
+
+    const planName = Array.isArray(plans) ? plans[0]?.name : plans?.name;
+    const planLabel = planName ? `${planName} plan` : "No plan yet";
+
+
 
     const { count: scoreCount } = await supabase
         .from("scores")
@@ -38,6 +47,14 @@ export default async function DashboardPage() {
         .from("draw_results")
         .select("prize_amount")
         .eq("user_id", user.id);
+
+    const charity = charitySetting?.charities as
+        | { name?: string }
+        | { name?: string }[]
+        | undefined;
+
+    const charityName = Array.isArray(charity) ? charity[0]?.name : charity?.name;
+
 
     const winningsTotal =
         winnings?.reduce((sum, r) => sum + Number(r.prize_amount || 0), 0) ?? 0;
@@ -86,10 +103,11 @@ export default async function DashboardPage() {
                             {subscription?.status ?? "inactive"}
                         </p>
                         <p className="mt-1 text-sm text-neutral-400">
-                            {subscription?.subscription_plans
-                                ? `${subscription.subscription_plans.name} plan`
-                                : "No plan yet"}
+                            {planLabel}
                         </p>
+
+
+
                     </div>
                 </div>
 
@@ -104,7 +122,7 @@ export default async function DashboardPage() {
                     <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
                         <p className="text-sm text-neutral-400">Charity</p>
                         <p className="mt-2 font-medium">
-                            {charitySetting?.charities?.name ?? "Not selected"}
+                            {charityName ?? "Not selected"}
                         </p>
                         <p className="mt-1 text-sm text-neutral-300">
                             Contribution: {charitySetting?.contribution_percent ?? 0}%
